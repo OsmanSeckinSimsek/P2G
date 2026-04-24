@@ -21,6 +21,20 @@ set(HEFFTE_PATH "$ENV{HOME}/lib_installed/heffte" CACHE PATH "Path to HeFFTe ins
 # So we need to search in the parent directory if HEFFTE_PATH points to the install root
 find_package(Heffte REQUIRED PATHS ${HEFFTE_PATH} ${HEFFTE_PATH}/lib/cmake ${HEFFTE_PATH}/share)
 
+# On glibc >= 2.34 (RHEL 9, Alma 9, Rocky 9, …) librt was merged into libc and
+# librt.so no longer exists as a standalone file.  HeFFTe's installed CMake
+# config may still carry a hard-coded absolute path to it, which causes a
+# "no rule to make target" error at build time.  Strip it here.
+if(TARGET Heffte::Heffte)
+    foreach(_prop INTERFACE_LINK_LIBRARIES LINK_LIBRARIES)
+        get_target_property(_heffte_libs Heffte::Heffte ${_prop})
+        if(_heffte_libs)
+            list(FILTER _heffte_libs EXCLUDE REGEX ".*librt\\.so")
+            set_target_properties(Heffte::Heffte PROPERTIES ${_prop} "${_heffte_libs}")
+        endif()
+    endforeach()
+endif()
+
 # set(FFTW_PATH "$ENV{HOME}/lib_installed/fftw" CACHE PATH "Path to FFTW installation")
 set(CSTONE_DIR ${PROJECT_SOURCE_DIR}/cstone/include)
 set(CSTONE_TEST_DIR ${PROJECT_SOURCE_DIR}/cstone/test)
