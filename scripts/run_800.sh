@@ -23,3 +23,5 @@ srun ./select_gpu.sh ./power_spectrum-cuda --checkpoint CHECKPOINT-PATH --interp
 
 # SPH interpolation
 srun ./select_gpu.sh ./power_spectrum-cuda --checkpoint CHECKPOINT-PATH --interpolation sph --stepNo 1 --gridSize 1024 --cuda-aware-full-pack --output P2G_sph_${SUFFIX}.txt
+
+mv 800.out scaling_${SUFFIX}.out

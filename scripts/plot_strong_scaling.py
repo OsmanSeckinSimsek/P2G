@@ -17,10 +17,11 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-GPU_COUNTS   = [2, 4, 8, 16]
+GPU_COUNTS = [2, 4, 8, 16]
 INTERP_ORDER = ["nearest", "cell_avg", "sph"]
 
 # ── parser ────────────────────────────────────────────────────────────────────
+
 
 def parse_timings(filepath):
     """Return a list of timing dicts (one per timing-summary block in the file)."""
@@ -45,6 +46,7 @@ def parse_timings(filepath):
 
 # ── main ─────────────────────────────────────────────────────────────────────
 
+
 def main():
     out_dir = sys.argv[1] if len(sys.argv) > 1 else "."
 
@@ -67,11 +69,11 @@ def main():
 
     available = sorted(all_timings.keys())
     baseline_n = available[0]
-    n_methods  = max(len(v) for v in all_timings.values())
-    methods    = INTERP_ORDER[:n_methods]
+    n_methods = max(len(v) for v in all_timings.values())
+    methods = INTERP_ORDER[:n_methods]
 
     # ── build speedup / efficiency per method ────────────────────────────────
-    colors  = ["tab:blue", "tab:orange", "tab:green"]
+    colors = ["tab:blue", "tab:orange", "tab:green"]
     markers = ["o", "s", "^"]
 
     fig, (ax_sp, ax_eff) = plt.subplots(1, 2, figsize=(12, 5))
@@ -87,19 +89,21 @@ def main():
         if len(gpus) < 2:
             continue
 
-        t_base   = combined[0]
-        speedup  = [t_base / ct for ct in combined]
-        eff      = [s / (n / baseline_n) for s, n in zip(speedup, gpus)]
+        t_base = combined[0]
+        speedup = [t_base / ct for ct in combined]
+        eff = [s / (n / baseline_n) for s, n in zip(speedup, gpus)]
 
-        kw = dict(color=colors[i], marker=markers[i], linewidth=2, markersize=8)
+        kw = dict(color=colors[i], marker=markers[i],
+                  linewidth=2, markersize=8)
         ax_sp.plot(gpus, speedup, label=method, **kw)
         ax_eff.plot(gpus, eff,    label=method, **kw)
 
     # ideal reference lines
-    ideal_x  = [available[0], available[-1]]
+    ideal_x = [available[0], available[-1]]
     ideal_sp = [1.0, available[-1] / available[0]]
     ax_sp.plot(ideal_x, ideal_sp, "k--", linewidth=1.5, label="ideal")
-    ax_eff.axhline(1.0,           color="k", linestyle="--", linewidth=1.5, label="ideal")
+    ax_eff.axhline(1.0,           color="k", linestyle="--",
+                   linewidth=1.5, label="ideal")
 
     # ── decorate ─────────────────────────────────────────────────────────────
     for ax in (ax_sp, ax_eff):
@@ -109,10 +113,10 @@ def main():
         ax.grid(True, alpha=0.3)
 
     ax_sp.set_ylabel("Speedup")
-    ax_sp.set_title("Speedup  (Sync + P2G)")
+    ax_sp.set_title("Speedup  (Domain-sync + P2G)")
 
     ax_eff.set_ylabel("Parallel efficiency")
-    ax_eff.set_title("Parallel efficiency  (Sync + P2G)")
+    ax_eff.set_title("Parallel efficiency  (Domain-sync + P2G)")
     ax_eff.set_ylim(0, 1.2)
 
     plt.tight_layout()
