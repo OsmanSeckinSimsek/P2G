@@ -53,12 +53,14 @@ public:
         tstart = tlast = Clock::now();
     }
 
-    //! @brief time elapsed between tstart and now
-    void elapsed(const std::string func) 
+    //! @brief time elapsed between tstart and now, returns seconds
+    float elapsed(const std::string func)
     {
         tlast = Clock::now();
-        out << func << " elapsed time: " << std::chrono::duration_cast<Time>(tlast - tstart).count() << std::endl;
+        float dt = std::chrono::duration_cast<Time>(tlast - tstart).count();
+        out << func << " elapsed time: " << dt << std::endl;
         tstart = tlast;
+        return dt;
     }
 
 

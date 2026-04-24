@@ -1,0 +1,6 @@
+#!/bin/bash
+
+export LOCAL_RANK=$SLURM_LOCALID
+export CUDA_VISIBLE_DEVICES=$SLURM_LOCALID
+# echo "rank " $LOCAL_RANK " sees " $CUDA_VISIBLE_DEVICES
+exec $*

@@ -20,7 +20,7 @@
 
 using namespace sphexa;
 
-void printSpectrumHelp(char* binName, int rank);
+void printSpectrumHelp(char *binName, int rank);
 using MeshType = double;
 
 enum class RasterBackend
@@ -30,7 +30,7 @@ enum class RasterBackend
     Nvshmem
 };
 
-RasterBackend selectBackend(const ArgParser& parser)
+RasterBackend selectBackend(const ArgParser &parser)
 {
     std::string mode = "auto";
     if (parser.exists("--backend"))
@@ -55,16 +55,15 @@ RasterBackend selectBackend(const ArgParser& parser)
 #endif
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     // For CUDA builds, we need to ensure MPI is initialized before any CUDA operations
     // The CUDA runtime might initialize automatically when libraries are loaded,
     // so we initialize MPI first to avoid conflicts
     auto [rank, numRanks] = initMpi();
-    
-    const ArgParser       parser(argc, (const char**)argv);
-    RasterBackend         backend = selectBackend(parser);
 
+    const ArgParser parser(argc, (const char **)argv);
+    RasterBackend backend = selectBackend(parser);
 
     if (backend == RasterBackend::Nvshmem)
     {
@@ -80,7 +79,7 @@ int main(int argc, char** argv)
         nvshmemx_init_attr_t nvshmem_attr;
         std::memset(&nvshmem_attr, 0, sizeof(nvshmem_attr));
         nvshmem_attr.mpi_comm = MPI_COMM_WORLD;
-        int nvshmem_status    = nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &nvshmem_attr);
+        int nvshmem_status = nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &nvshmem_attr);
         if (nvshmem_status != 0)
         {
             std::cerr << "Failed to initialize NVSHMEM (" << nvshmem_status << ")" << std::endl;
@@ -101,46 +100,47 @@ int main(int argc, char** argv)
         std::string backendName;
         switch (backend)
         {
-            case RasterBackend::Cpu:
-                backendName = "CPU/MPI";
-                break;
-            case RasterBackend::Cuda:
-                backendName = "CUDA";
+        case RasterBackend::Cpu:
+            backendName = "CPU/MPI";
+            break;
+        case RasterBackend::Cuda:
+            backendName = "CUDA";
 #ifdef USE_GPU_DIRECT
-                backendName += " (GPU-Direct enabled)";
+            backendName += " (GPU-Direct enabled)";
 #endif
-                break;
-            case RasterBackend::Nvshmem:
-                backendName = "NVSHMEM";
-                break;
+            break;
+        case RasterBackend::Nvshmem:
+            backendName = "NVSHMEM";
+            break;
         }
-        std::cout << "Selected rasterization backend: " << backendName << std::endl;
+        // std::cout << "Selected rasterization backend: " << backendName << std::endl;
     }
 
-    using KeyType        = uint64_t;
+    using KeyType = uint64_t;
     using CoordinateType = double;
 
     using Domain = cstone::Domain<KeyType, CoordinateType, cstone::CpuTag>;
-    
-    const std::string initFile           = parser.get("--checkpoint");
-    int               stepNo             = parser.get("--stepNo", 0);
-    int               meshSize           = parser.get("--gridSize", 0);
-    size_t            numShells          = parser.get("--numShells", 0);
-    std::string       interpolationMode  = parser.get<std::string>("--interpolation", "nearest"); // "nearest" or "sph"
-    std::string       fieldMode          = parser.get<std::string>("--field", "velocity");         // "velocity" or "density"
-    std::string       outputFile         = parser.get<std::string>("--output", "power_spectrum.txt");
-    bool              usePencils         = parser.exists("--pencils");
-    bool              useCudaAwareMpi    = parser.exists("--cuda-aware-mpi");
-    bool              useCudaAwareFullPack = parser.exists("--cuda-aware-full-pack");
 
-    Timer timer(std::cout);
+    const std::string initFile = parser.get("--checkpoint");
+    int stepNo = parser.get("--stepNo", 0);
+    int meshSize = parser.get("--gridSize", 0);
+    size_t numShells = parser.get("--numShells", 0);
+    std::string interpolationMode = parser.get<std::string>("--interpolation", "nearest"); // "nearest" or "sph"
+    std::string fieldMode = parser.get<std::string>("--field", "velocity");                // "velocity" or "density"
+    std::string outputFile = parser.get<std::string>("--output", "power_spectrum.txt");
+    bool usePencils = parser.exists("--pencils");
+    bool useCudaAwareMpi = parser.exists("--cuda-aware-mpi");
+    bool useCudaAwareFullPack = parser.exists("--cuda-aware-full-pack");
+
+    std::ostream devNull(nullptr);
+    Timer timer(devNull);
 
     // read HDF5 checkpoint
     auto reader = makeH5PartReader(MPI_COMM_WORLD);
     reader->setStep(initFile, stepNo, FileMode::collective);
 
     size_t numParticles = reader->globalNumParticles(); // total number of particles in the simulation
-    size_t simDim       = std::cbrt(numParticles);      // dimension of the simulation
+    size_t simDim = std::cbrt(numParticles);            // dimension of the simulation
 
     std::vector<double> x(reader->localNumParticles());
     std::vector<double> y(reader->localNumParticles());
@@ -164,12 +164,12 @@ int main(int argc, char** argv)
     reader->readField("vz", vz.data());
     reader->closeStep();
 
-    timer.elapsed("Checkpoint read");
+    float checkpointReadTime = timer.elapsed("Checkpoint read");
 
-    std::cout << "Read " << reader->localNumParticles() << " particles on rank " << rank << std::endl;
+    // std::cout << "Read " << reader->localNumParticles() << " particles on rank " << rank << std::endl;
 
     // get the dimensions from the checkpoint
-    int powerDim = std::ceil(std::log(simDim) / std::log(2));// + 1;
+    int powerDim = std::ceil(std::log(simDim) / std::log(2)); // + 1;
     int gridDim;
     if (meshSize > 0)
     {
@@ -179,7 +179,8 @@ int main(int argc, char** argv)
     {
         gridDim = simDim; // dimension of the mesh // std::pow(2, powerDim);
     }
-    if (numShells == 0) numShells = gridDim / 2; // default number of shells is half of the mesh dimension
+    if (numShells == 0)
+        numShells = gridDim / 2; // default number of shells is half of the mesh dimension
 
     // init mesh, sim box -0.5 to 0.5 by default
     Mesh<MeshType> mesh(rank, numRanks, gridDim, numShells);
@@ -189,20 +190,20 @@ int main(int argc, char** argv)
 
     if (rank == 0 && mesh.useCudaAwareMpi_)
     {
-        std::cout << "CUDA-aware MPI exchange path requested for CUDA rasterization methods." << std::endl;
-        if (mesh.useCudaAwareGpuPack_)
-            std::cout << "Full GPU rank-packing enabled (experimental)." << std::endl;
+        // std::cout << "CUDA-aware MPI exchange path requested for CUDA rasterization methods." << std::endl;
+        // if (mesh.useCudaAwareGpuPack_)
+        //     std::cout << "Full GPU rank-packing enabled (experimental)." << std::endl;
     }
 
     // mesh.assign_velocities_to_mesh(x.data(), y.data(), z.data(), vx.data(), vy.data(), vz.data(), simDim, gridDim);
 
     // create cornerstone tree
     std::vector<KeyType> keys(x.size());
-    size_t               bucketSizeFocus = 64;
-    size_t               bucketSize      = std::max(bucketSizeFocus, numParticles / (100 * numRanks));
-    float                theta           = 1.0;
-    cstone::Box<double>  box(-0.5, 0.5, cstone::BoundaryType::periodic); // boundary type from file?
-    Domain               domain(rank, numRanks, bucketSize, bucketSizeFocus, theta, box);
+    size_t bucketSizeFocus = 64;
+    size_t bucketSize = std::max(bucketSizeFocus, numParticles / (100 * numRanks));
+    float theta = 1.0;
+    cstone::Box<double> box(-0.5, 0.5, cstone::BoundaryType::periodic); // boundary type from file?
+    Domain domain(rank, numRanks, bucketSize, bucketSizeFocus, theta, box);
 
     domain.sync(keys, x, y, z, h, std::tie(vx, vy, vz), std::tie(scratch1, scratch2, scratch3));
     // std::cout << "rank = " << rank << " numLocalParticles after sync = " << domain.nParticles() << std::endl;
@@ -216,7 +217,7 @@ int main(int argc, char** argv)
     scratch2.clear();
     scratch3.clear();
 
-    timer.elapsed("Sync");
+    float syncTime = timer.elapsed("Sync");
 
     if (fieldMode != "velocity" && fieldMode != "density")
     {
@@ -228,7 +229,8 @@ int main(int argc, char** argv)
     // Choose particle-to-grid field
     if (fieldMode == "density")
     {
-        if (rank == 0) std::cout << "Using density rasterization" << std::endl;
+        // if (rank == 0)
+        //     std::cout << "Using density rasterization" << std::endl;
         if (backend == RasterBackend::Cuda)
         {
 #ifdef USE_CUDA
@@ -239,8 +241,8 @@ int main(int argc, char** argv)
         }
         else
         {
-            if (backend == RasterBackend::Nvshmem && rank == 0)
-                std::cout << "NVSHMEM density rasterizer is not implemented, using CPU/MPI density path." << std::endl;
+            // if (backend == RasterBackend::Nvshmem && rank == 0)
+            //     std::cout << "NVSHMEM density rasterizer is not implemented, using CPU/MPI density path." << std::endl;
             mesh.rasterize_particles_to_density(keys, x, y, z, powerDim);
         }
 
@@ -254,7 +256,8 @@ int main(int argc, char** argv)
     }
     else if (interpolationMode == "sph")
     {
-        if (rank == 0) std::cout << "Using SPH interpolation" << std::endl;
+        // if (rank == 0)
+        //     std::cout << "Using SPH interpolation" << std::endl;
         if (backend == RasterBackend::Cuda)
         {
 #ifdef USE_CUDA
@@ -270,7 +273,8 @@ int main(int argc, char** argv)
     }
     else if (interpolationMode == "cell_avg")
     {
-        if (rank == 0) std::cout << "Using cell-average interpolation" << std::endl;
+        // if (rank == 0)
+        //     std::cout << "Using cell-average interpolation" << std::endl;
         if (backend == RasterBackend::Cuda)
         {
 #ifdef USE_CUDA
@@ -287,7 +291,8 @@ int main(int argc, char** argv)
     else
     {
         // Default: nearest neighbor
-        if (rank == 0) std::cout << "Using nearest neighbor interpolation" << std::endl;
+        // if (rank == 0)
+        //     std::cout << "Using nearest neighbor interpolation" << std::endl;
         if (backend == RasterBackend::Nvshmem)
         {
 #ifdef USE_NVSHMEM
@@ -311,11 +316,11 @@ int main(int argc, char** argv)
     }
 
     // mesh.rasterize_using_cornerstone(keys, x, y, z, vx, vy, vz, powerDim);
-    std::cout << "rasterized" << std::endl;
-    timer.elapsed("Rasterization");
+    // std::cout << "rasterized" << std::endl;
+    float p2gTime = timer.elapsed("Rasterization");
     // calculate power spectrum
     mesh.calculate_power_spectrum();
-    timer.elapsed("Power Spectrum");
+    float powerSpectrumTime = timer.elapsed("Power Spectrum");
 
     // write power spectrum to HDF5?
     if (rank == 0)
@@ -329,6 +334,16 @@ int main(int argc, char** argv)
         file.close();
     }
 
+    if (rank == 0)
+    {
+        std::cout << "\n--- Timing summary ---\n";
+        std::cout << "Checkpoint read time : " << checkpointReadTime << " s\n";
+        std::cout << "Sync time            : " << syncTime << " s\n";
+        std::cout << "P2G time             : " << p2gTime << " s\n";
+        std::cout << "Power spectrum time  : " << powerSpectrumTime << " s\n";
+        std::cout << "-------------------------------\n";
+    }
+
     int exitCode = exitSuccess();
 #ifdef USE_NVSHMEM
     if (backend == RasterBackend::Nvshmem)
@@ -340,7 +355,7 @@ int main(int argc, char** argv)
     return exitCode;
 }
 
-void printSpectrumHelp(char* name, int rank)
+void printSpectrumHelp(char *name, int rank)
 {
     if (rank == 0)
     {
